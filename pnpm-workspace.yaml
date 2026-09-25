@@ -1,5 +1,10 @@
 packages:
   - 'extensions/*'
+
+overrides:
+  p-map: ^4.0.0
+  qs: ^6.16.0
+
 shamefullyHoist: true
 allowBuilds:
   '@parcel/watcher': true
