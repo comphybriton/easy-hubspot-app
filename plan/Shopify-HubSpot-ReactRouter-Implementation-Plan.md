@@ -1,317 +1,88 @@
-# Shopify ↔ HubSpot Embedded App (React Router) - Implementation Plan
+# Shopify ↔ HubSpot Embedded App Implementation Guide
 
 ## Overview
 
-Build a production-ready Shopify Embedded App using React Router, Shopify Polaris, App Bridge, NestJS, PostgreSQL, Redis/BullMQ, and HubSpot APIs.
-
----
-
-# Updated Architecture
-
-```text
-┌─────────────────────────┐
-│ Shopify Admin           │
-│ Embedded App            │
-└──────────┬──────────────┘
-           │
-           ▼
-┌─────────────────────────┐
-│ React Router App        │
-│                         │
-│ Routes                  │
-│ Loaders                 │
-│ Actions                 │
-└──────────┬──────────────┘
-           │
-           ▼
-┌─────────────────────────┐
-│ Node.js Backend         │
-│                         │
-│ Shopify APIs            │
-│ HubSpot APIs            │
-│ Queue Service           │
-└──────────┬──────────────┘
-           │
-           ▼
-┌─────────────────────────┐
-│ PostgreSQL             │
-│ Redis / BullMQ         │
-└─────────────────────────┘
-```
-
----
-
-# Recommended Technology Stack
-
-## Frontend
+Build a production-grade Shopify Embedded App using:
 
 - React Router v7
-- TypeScript
 - Shopify Polaris
 - Shopify App Bridge
-- TanStack Query
-
-## Backend
-
-- Node.js
+- Shopify Admin UI Extensions
 - NestJS
-- TypeScript
-
-## Database
-
 - PostgreSQL
-- Prisma ORM
-
-## Queue
-
-- BullMQ
-- Redis
-
-## Infrastructure
-
-- AWS ECS
-- AWS RDS
-- ElastiCache
-- CloudWatch
+- BullMQ + Redis
+- HubSpot OAuth & CRM APIs
 
 ---
 
-# Monorepo Structure
+# Solution Architecture
 
 ```text
-shopify-hubspot-app
-│
-├── apps
-│   ├── web
-│   │   ├── app
-│   │   ├── routes
-│   │   ├── components
-│   │   └── lib
-│   │
-│   └── api
-│       ├── src
-│       ├── modules
-│       └── workers
-│
-├── packages
-│   ├── shared-types
-│   ├── sdk-shopify
-│   └── sdk-hubspot
-│
-└── prisma
+┌─────────────────────────────┐
+│ Shopify Admin               │
+│                             │
+│ Embedded App (React Router) │
+│ Admin UI Extensions         │
+└──────────────┬──────────────┘
+               │
+               ▼
+┌─────────────────────────────┐
+│ NestJS API                  │
+│ Shopify Service             │
+│ HubSpot Service             │
+│ Sync Service                │
+│ Queue Service               │
+└──────────────┬──────────────┘
+               │
+       ┌───────┴────────┐
+       │                │
+       ▼                ▼
+ PostgreSQL         Redis/BullMQ
+       │
+       ▼
+ HubSpot APIs
 ```
 
----
+## Step 1 - Create Shopify App
 
-# React Router Route Design
+```bash
+npm init @shopify/app@latest
+```
+
+Select:
 
 ```text
-/
-├── dashboard
-├── connections
-├── sync
-├── mappings
-├── logs
-├── settings
+App Name: shopify-hubspot-sync
+Framework: React Router
+Embedded App: Yes
+Language: TypeScript
 ```
 
-## Route Files
+```bash
+pnpm install
+pnpm shopify app dev
+```
+
+## Step 2 - Create Navigation
+
+Routes:
 
 ```text
 app/routes
-
-dashboard.tsx
-connections.tsx
-sync.tsx
-logs.tsx
-settings.tsx
-mappings.tsx
+├── dashboard.tsx
+├── field-mapping.tsx
+├── sync.tsx
+├── health.tsx
+├── settings.tsx
+└── logs.tsx
 ```
 
----
+## Step 3 - Connect HubSpot
 
-# Dashboard
-
-Route:
-
-```text
-/dashboard
-```
-
-Widgets:
-
-- Customers
-- Orders
-- Products
-- Sync Health
-- Connection Status
-
-Data:
-
-- Store Information
-- HubSpot Status
-- Last Sync
-- Records Synced
-- Recent Errors
-
----
-
-# Connection Management
-
-Route:
-
-```text
-/connections
-```
-
-Merchant View:
-
-```text
-✅ Shopify Connected
-❌ HubSpot Not Connected
-```
-
-Flow:
-
-```text
-React Router
-    ↓
-NestJS API
-    ↓
-HubSpot OAuth
-    ↓
-Authorization Code
-    ↓
-Access Token
-```
-
----
-
-# Customer Sync Module
-
-Shopify Events:
-
-- customers/create
-- customers/update
-
-Flow:
-
-```text
-Webhook
-   ↓
-Queue
-   ↓
-Sync Job
-   ↓
-HubSpot Contact
-```
-
-Entity:
-
-```typescript
-Customer {
-  shopifyCustomerId
-  email
-  firstName
-  lastName
-}
-```
-
----
-
-# Order Sync Module
-
-Events:
-
-- orders/create
-- orders/paid
-- orders/updated
-
-Flow:
-
-```text
-Shopify Order
-      ↓
-HubSpot Deal
-```
-
-Example:
-
-```text
-Order #12345
-Amount: $250
-Status: Paid
-```
-
----
-
-# Product Sync Module
-
-Events:
-
-- products/create
-- products/update
-
-Mapping:
-
-```text
-Shopify Product
-      ↓
-HubSpot Product
-```
-
-Database Mapping:
+Database table:
 
 ```sql
-shopify_product_id
-hubspot_product_id
-```
-
----
-
-# Queue Architecture
-
-```text
-Webhook
-   ↓
-BullMQ
-   ↓
-Worker
-   ↓
-HubSpot API
-```
-
-Queues:
-
-- customer-sync
-- order-sync
-- product-sync
-- retry-sync
-
-Benefits:
-
-- Retry Handling
-- Rate Limiting
-- Error Recovery
-- Scalability
-
----
-
-# Database Design
-
-## stores
-
-```sql
-id
-shop_domain
-access_token
-status
-created_at
-```
-
-## hubspot_connections
-
-```sql
+hubspot_connections
 id
 store_id
 portal_id
@@ -320,217 +91,165 @@ refresh_token
 expires_at
 ```
 
-## sync_jobs
+## Step 4 - Create Sync Dashboard
 
-```sql
-id
-store_id
-type
-status
-payload
-started_at
-completed_at
-```
-
-## sync_logs
-
-```sql
-id
-job_id
-level
-message
-```
-
-## field_mappings
-
-```sql
-id
-store_id
-shopify_field
-hubspot_field
-```
-
----
-
-# NestJS Modules
+Route:
 
 ```text
-AuthModule
-ShopifyModule
-HubSpotModule
-WebhookModule
-SyncModule
-QueueModule
-AuditModule
+/dashboard
 ```
 
-Folder Structure:
-
-```text
-src/modules
-
-auth
-shopify
-hubspot
-sync
-webhook
-audit
-```
-
----
-
-# API Endpoints
-
-## OAuth
-
-```http
-GET  /oauth/shopify
-GET  /oauth/hubspot
-GET  /oauth/hubspot/callback
-```
-
-## Dashboard
+API:
 
 ```http
 GET /api/dashboard
 ```
 
-## Sync
+## Step 5 - Build Field Mapping UI
 
-```http
-POST /api/sync/customers
-POST /api/sync/orders
-POST /api/sync/products
+Route:
+
+```text
+/field-mapping
 ```
 
-## Logs
+Database:
 
-```http
-GET /api/logs
+```sql
+field_mappings
+id
+store_id
+shopify_field
+hubspot_property
+direction
 ```
 
----
+## Step 6 - Register Shopify Webhooks
 
-# Webhook Endpoints
+Required:
 
-## Shopify
-
-```http
-POST /webhooks/customers
-POST /webhooks/orders
-POST /webhooks/products
-POST /webhooks/app-uninstalled
+```text
+customers/create
+customers/update
+orders/create
+orders/updated
+products/create
+products/update
+app/uninstalled
 ```
 
-## HubSpot (Phase 2)
+## Step 7 - Implement Queue System
 
-```http
-POST /webhooks/hubspot
+```bash
+pnpm add bullmq ioredis
 ```
 
----
+Queues:
 
-# Polaris Pages
+```text
+customer-sync
+order-sync
+product-sync
+retry-sync
+```
 
-## Dashboard
+## Step 8 - Create Workers
 
-- Cards
-- Metrics
-- Badges
+```text
+CustomerSyncWorker
+OrderSyncWorker
+ProductSyncWorker
+```
 
-## Connections
+## Step 9 - Retry Queue
 
-- Connected Accounts
-- OAuth Actions
+```typescript
+attempts: 5
+```
 
-## Sync
+Backoff:
 
-- Run Sync
-- Sync History
-- Retry Failed Jobs
+```text
+5s
+30s
+2m
+5m
+15m
+```
 
-## Logs
+## Step 10 - Manual Re-Sync
 
-- Search
-- Filter
-- Export
+Route:
 
-## Settings
+```text
+/sync
+```
 
-- Webhook Settings
-- Field Mapping
-- Sync Rules
+## Step 11 - Sync Health Monitoring
 
----
+Route:
 
-# Sprint Breakdown
+```text
+/health
+```
 
-## Sprint 1
+## Step 12 - Shopify Admin UI Extension
 
-- React Router Setup
-- Shopify Embedded App
-- App Bridge
-- Polaris
+```bash
+shopify app generate extension
+```
 
-## Sprint 2
+Select:
 
-- HubSpot OAuth
-- Connection Screen
-- Database
+```text
+Admin UI Extension
+```
 
-## Sprint 3
+## Step 13 - Logging Screen
 
-- Customer Sync
-- Webhook Handling
-- BullMQ
+Route:
 
-## Sprint 4
+```text
+/logs
+```
 
-- Order Sync
-- Product Sync
-- Dashboard Metrics
+## Step 14 - Database Design
 
-## Sprint 5
+```sql
+stores
+hubspot_connections
+field_mappings
+sync_jobs
+sync_logs
+sync_metrics
+product_mappings
+customer_mappings
+order_mappings
+```
 
-- Logs
-- Retry Queue
-- Error Handling
+## MVP Roadmap
 
-## Sprint 6
-
-- Performance Testing
-- Security Review
-- Production Deployment
-
----
-
-# Recommended V1 Scope
-
-## Include
-
-- Shopify Installation
+### Sprint 1
+- Shopify App Setup
+- Embedded App
 - HubSpot OAuth
 - Dashboard
+
+### Sprint 2
 - Customer Sync
-- Order Sync
+- Queue Infrastructure
+- Logging
+
+### Sprint 3
 - Product Sync
-- Sync Logs
+- Order Sync
+
+### Sprint 4
+- Field Mapping
 - Retry Queue
-- App Uninstall Cleanup
+- Health Monitoring
 
-## Defer to V2
-
-- Two-way Synchronization
-- HubSpot Webhooks
-- Custom Field Mapping
-- Shopify Metafields
-- Marketing Automation
-- Multi-Store Management
-
----
-
-# Estimated Timeline
-
-- 6 Sprints
-- Approximately 10–12 Weeks
-- Small Team Delivery Ready
+### Sprint 5
+- Admin UI Extension
+- Manual Re-Sync
+- Production Hardening
